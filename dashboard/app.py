@@ -1,3 +1,4 @@
+
 import os
 
 import pandas as pd
@@ -13,22 +14,49 @@ st.set_page_config(
 )
 
 
-# Load environment variables
-load_dotenv()
+# Database configuration
 
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_HOST = os.getenv("DB_HOST")
-DB_NAME = os.getenv("DB_NAME")
+try:
+    DB_USER = st.secrets["DB_USER"]
+    DB_PASSWORD = st.secrets["DB_PASSWORD"]
+    DB_HOST = st.secrets["DB_HOST"]
+    DB_PORT = st.secrets.get("DB_PORT", "3306")
+    DB_NAME = st.secrets["DB_NAME"]
+    DB_CA = st.secrets.get("DB_CA", "")
+
+except Exception:
+    load_dotenv()
+
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_HOST = os.getenv("DB_HOST")
+    DB_PORT = os.getenv("DB_PORT", "3306")
+    DB_NAME = os.getenv("DB_NAME")
+    DB_CA = os.getenv("DB_CA", "")
 
 
 # Database connection
+
+connection_url = (
+    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}"
+    f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)
+
+connect_args = {}
+
+if DB_CA:
+    connect_args["ssl"] = {
+        "ca": DB_CA
+    }
+
 engine = create_engine(
-    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
+    connection_url,
+    connect_args=connect_args
 )
 
 
 # Load data
+
 students_df = pd.read_sql(
     "SELECT * FROM students",
     engine
@@ -51,6 +79,7 @@ academics_df = pd.read_sql(
 
 
 # Merge student and placement data
+
 data = pd.merge(
     students_df,
     placements_df,
@@ -60,6 +89,7 @@ data = pd.merge(
 
 
 # Calculate academic average
+
 academic_avg = (
     academics_df
     .groupby("student_id")["marks"]
@@ -67,6 +97,7 @@ academic_avg = (
     .round(2)
     .reset_index(name="academic_average")
 )
+
 
 data = pd.merge(
     data,
@@ -77,6 +108,7 @@ data = pd.merge(
 
 
 # Placement eligibility
+
 data["eligibility"] = data.apply(
     lambda row: "Eligible"
     if row["cgpa"] >= 7.0 and row["attendance"] >= 75
@@ -86,6 +118,7 @@ data["eligibility"] = data.apply(
 
 
 # Custom styling
+
 st.markdown(
     """
     <style>
@@ -126,6 +159,7 @@ st.markdown(
 
 
 # Sidebar
+
 st.sidebar.title("📊 Analytics")
 
 st.sidebar.markdown("### Filters")
@@ -163,20 +197,18 @@ min_cgpa = st.sidebar.slider(
 
 
 # Apply filters
-filtered_data = data.copy()
 
+filtered_data = data.copy()
 
 if selected_branch != "All":
     filtered_data = filtered_data[
         filtered_data["branch"] == selected_branch
     ]
 
-
 if selected_status != "All":
     filtered_data = filtered_data[
         filtered_data["placement_status"] == selected_status
     ]
-
 
 filtered_data = filtered_data[
     filtered_data["cgpa"] >= min_cgpa
@@ -184,6 +216,7 @@ filtered_data = filtered_data[
 
 
 # Header
+
 st.markdown(
     '<div class="dashboard-title">'
     'Student Performance & Placement Analytics'
@@ -200,6 +233,7 @@ st.markdown(
 
 
 # KPI calculations
+
 total_students = len(filtered_data)
 
 placed_students = (
@@ -212,13 +246,11 @@ placement_rate = (
     else 0
 )
 
-
 average_cgpa = (
     filtered_data["cgpa"].mean()
     if total_students > 0
     else 0
 )
-
 
 average_attendance = (
     filtered_data["attendance"].mean()
@@ -226,18 +258,15 @@ average_attendance = (
     else 0
 )
 
-
 average_marks = (
     filtered_data["academic_average"].mean()
     if total_students > 0
     else 0
 )
 
-
 placed_data = filtered_data[
     filtered_data["placement_status"] == "Placed"
 ]
-
 
 average_package = (
     placed_data["package_lpa"].mean()
@@ -247,8 +276,8 @@ average_package = (
 
 
 # KPI cards
-col1, col2, col3, col4, col5, col6 = st.columns(6)
 
+col1, col2, col3, col4, col5, col6 = st.columns(6)
 
 col1.metric(
     "Total Students",
@@ -285,14 +314,13 @@ st.divider()
 
 
 # Placement overview
+
 st.markdown(
     '<div class="section-title">Placement Overview</div>',
     unsafe_allow_html=True
 )
 
-
 col1, col2 = st.columns(2)
-
 
 with col1:
 
@@ -328,14 +356,13 @@ with col2:
 
 
 # Academic analysis
+
 st.markdown(
     '<div class="section-title">Academic Performance</div>',
     unsafe_allow_html=True
 )
 
-
 col1, col2 = st.columns(2)
-
 
 with col1:
 
@@ -381,7 +408,6 @@ st.subheader(
     "Subject-wise Average Marks"
 )
 
-
 subject_average = (
     academics_df
     .groupby("subject")["marks"]
@@ -389,26 +415,23 @@ subject_average = (
     .round(2)
 )
 
-
 st.bar_chart(
     subject_average
 )
 
 
 # Company analysis
+
 st.markdown(
     '<div class="section-title">Placement Companies</div>',
     unsafe_allow_html=True
 )
 
-
 company_data = filtered_data[
     filtered_data["placement_status"] == "Placed"
 ]
 
-
 col1, col2 = st.columns(2)
-
 
 with col1:
 
@@ -445,17 +468,16 @@ with col2:
 
 
 # Skills analysis
+
 st.markdown(
     '<div class="section-title">Skills Analysis</div>',
     unsafe_allow_html=True
 )
 
-
 skill_counts = (
     skills_df["skill_name"]
     .value_counts()
 )
-
 
 st.bar_chart(
     skill_counts
@@ -463,22 +485,20 @@ st.bar_chart(
 
 
 # Skill gap analysis
+
 st.markdown(
     '<div class="section-title">Skill Gap Analysis</div>',
     unsafe_allow_html=True
 )
 
-
 not_placed_students = filtered_data[
     filtered_data["placement_status"] == "Not Placed"
 ]
-
 
 not_placed_ids = (
     not_placed_students["student_id"]
     .tolist()
 )
-
 
 not_placed_skills = skills_df[
     skills_df["student_id"].isin(
@@ -486,15 +506,12 @@ not_placed_skills = skills_df[
     )
 ]
 
-
 skill_gap_counts = (
     not_placed_skills["skill_name"]
     .value_counts()
 )
 
-
 col1, col2 = st.columns(2)
-
 
 with col1:
 
@@ -543,14 +560,13 @@ with col2:
 
 
 # Eligibility analysis
+
 st.markdown(
     '<div class="section-title">Placement Eligibility</div>',
     unsafe_allow_html=True
 )
 
-
 col1, col2 = st.columns(2)
-
 
 with col1:
 
@@ -597,19 +613,17 @@ with col2:
 
 
 # Student search
+
 st.markdown(
     '<div class="section-title">Student Search</div>',
     unsafe_allow_html=True
 )
 
-
 search = st.text_input(
     "Search student by name"
 )
 
-
 student_table = filtered_data.copy()
-
 
 if search:
 
@@ -620,7 +634,6 @@ if search:
             na=False
         )
     ]
-
 
 display_columns = [
     "student_id",
@@ -635,7 +648,6 @@ display_columns = [
     "placement_status"
 ]
 
-
 st.dataframe(
     student_table[
         display_columns
@@ -646,11 +658,11 @@ st.dataframe(
 
 
 # Top performers
+
 st.markdown(
     '<div class="section-title">Top Performing Students</div>',
     unsafe_allow_html=True
 )
-
 
 top_students = (
     data[
@@ -673,7 +685,6 @@ top_students = (
     .head(10)
 )
 
-
 st.dataframe(
     top_students,
     use_container_width=True,
@@ -682,7 +693,6 @@ st.dataframe(
 
 
 st.divider()
-
 
 st.caption(
     "Student Performance & Placement Analytics | "
